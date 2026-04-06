@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EMAIL AVALANCHE</title>
+
+<!-- Telegram Mini App SDK -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=VT323&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+/* ─── VARIABLES ───────────────────────────────────────────────────────── */
+:root {
+  --bg:          #08080a;
+  --paper:       #f4efe3;
+  --paper-dim:   #e6dfc9;
+  --ink:         #1c1a14;
+  --red:         #bf3728;
+  --red-hi:      #e84234;
+  --green:       #1f9e55;
+  --yellow:      #e8930a;
+  --blue:        #1e6eb5;
+  --gray:        #6b7280;
+  --amber:       #d97706;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  font-family: 'IBM Plex Mono', monospace;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
+/* CRT overlay */
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);
+  pointer-events:none; z-index:9000;
+}
+body::after {
+  content:'';
+  position:fixed; inset:0;
+  background: radial-gradient(ellipse at 50% 40%, transparent 45%, rgba(0,0,0,.65) 100%);
+  pointer-events:none; z-index:8999;
+}
+
+/* ─── LAYOUT ──────────────────────────────────────────────────────────── */
+.screen { display:none; position:fixed; inset:0; overflow-y:auto; padding:16px; }
+.screen.active { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+
+/* ─── TITLE ───────────────────────────────────────────────────────────── */
+#screen-title { gap:0; }
+
+.monitor {
+  width:100%; max-width:540px;
+  background:var(--paper);
+  border:3px solid #2a2a2a;
+  border-radius:4px;
+  padding:32px 28px 28px;
+  position:relative;
+  box-shadow: 0 0 0 7px #1a1a1a, 0 0 0 9px #363636, 0 24px 64px rgba(0,0,0,.85);
+}
+.monitor-dots {
+  position:absolute; top:10px; left:14px;
+  color:#aaa; font-size:9px; letter-spacing:5px;
+}
+
+.title-ascii {
+  font-family:'VT323',monospace;
+  font-size: clamp(48px, 11vw, 80px);
+  line-height:.95;
+  color:var(--red);
+  text-shadow: 3px 3px 0 #7a1a10;
+  animation: flicker 5s infinite;
+}
+@keyframes flicker {
+  0%,94%,96%,98%,100%{opacity:1}
+  95%{opacity:.5} 97%{opacity:.8} 99%{opacity:.3}
+}
+
+.title-sub {
+  font-family:'Courier Prime',monospace;
+  font-size:10px; letter-spacing:4px; color:var(--gray);
+  text-transform:uppercase; margin-top:4px;
+}
+
+.hdivider { border:none; border-top:2px dashed #ccc; margin:20px 0; }
+
+.title-blurb {
+  font-family:'Courier Prime',monospace;
+  font-size:14px; line-height:1.85; color:var(--ink);
+}
+.title-blurb strong { color:var(--red); }
+
+.key-row {
+  display:flex; gap:12px; justify-content:center;
+  flex-wrap:wrap; margin:20px 0 4px;
+}
+.kpill {
+  display:flex; align-items:center; gap:8px;
+  background:var(--ink); color:var(--paper);
+  padding:6px 14px; border-radius:2px;
+  font-size:12px; letter-spacing:1px;
+}
+.kpill .k {
+  background:var(--paper); color:var(--ink);
+  padding:1px 7px; font-weight:700;
+  border-radius:2px; font-size:15px;
+}
+
+.btn-primary {
+  display:block; width:100%;
+  background:var(--red); color:var(--paper);
+  border:none; padding:14px;
+  font-family:'VT323',monospace; font-size:30px;
+  letter-spacing:4px; cursor:pointer;
+  border-radius:2px;
+  box-shadow: 0 5px 0 #7a1a10;
+  transition: transform .1s, box-shadow .1s;
+  margin-top:20px;
+}
+.btn-primary:hover  { transform:translateY(-2px); box-shadow:0 7px 0 #7a1a10; }
+.btn-primary:active { transform:translateY(3px);  box-shadow:0 2px 0 #7a1a10; }
+
+/* ─── GAME SCREEN ─────────────────────────────────────────────────────── */
+#screen-game {
+  justify-content:flex-start;
+  padding:12px;
+  gap:10px;
+}
+
+.hud {
+  display:grid; grid-template-columns:1fr 1fr 1fr;
+  gap:8px; width:100%; max-width:540px;
+}
+.hud-box {
+  background:#111; border:1px solid #252525;
+  padding:8px 12px; border-radius:2px;
+}
+.hud-lbl { font-size:8px; letter-spacing:3px; color:#444; text-transform:uppercase; }
+.hud-val {
+  font-family:'VT323',monospace; font-size:26px;
+  color:var(--paper); line-height:1.1;
+  transition:color .4s;
+}
+.sbar-wrap { height:5px; background:#222; border-radius:3px; margin-top:3px; overflow:hidden; }
+.sbar      { height:100%; background:var(--green); border-radius:3px; transition:width .35s,background .35s; }
+
+/* timer */
+.timer-wrap { width:100%; max-width:540px; height:4px; background:#111; border-radius:2px; overflow:hidden; }
+.timer-bar  { height:100%; background:var(--yellow); border-radius:2px; transition:background .3s; }
+
+/* email card area */
+.inbox-area {
+  position:relative;
+  width:100%; max-width:540px;
+  flex:1; min-height:200px; max-height:300px;
+}
+
+.email-card {
+  position:absolute; inset:0;
+  background:var(--paper); border-radius:3px;
+  padding:18px 20px;
+  box-shadow: 0 2px 0 var(--paper-dim), 0 4px 0 #ccc, 0 6px 0 #bbb, 0 8px 24px rgba(0,0,0,.55);
+  overflow:hidden;
+  transition:transform .28s cubic-bezier(.175,.885,.32,1.275), opacity .28s;
+}
+.email-card.nightmare { background:#fff7f7; border-left:4px solid var(--red); }
+
+/* card animations */
+.email-card.fly-left    { animation: fLeft  .32s forwards; }
+.email-card.fly-right   { animation: fRight .32s forwards; }
+.email-card.fly-up      { animation: fUp    .32s forwards; }
+.email-card.do-shake    { animation: shake  .38s; }
+
+@keyframes fLeft  { to { transform:translateX(-130%) rotate(-14deg); opacity:0; } }
+@keyframes fRight { to { transform:translateX(130%)  rotate(14deg);  opacity:0; } }
+@keyframes fUp    { to { transform:translateY(-120%) scale(.8);       opacity:0; } }
+@keyframes shake  {
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-7px) rotate(-1deg)}
+  40%{transform:translateX(7px)  rotate(1deg)}
+  60%{transform:translateX(-5px)}
+  80%{transform:translateX(5px)}
+}
+
+/* email internals */
+.e-header   { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #ddd; }
+.e-from     { font-family:'Courier Prime',monospace; font-size:11px; color:#555; text-transform:uppercase; letter-spacing:.5px; }
+.e-time     { font-size:10px; color:#aaa; white-space:nowrap; margin-left:8px; }
+.e-badge    { display:inline-block; padding:2px 7px; border-radius:2px; font-size:9px; letter-spacing:2px; text-transform:uppercase; font-weight:700; margin-bottom:6px; }
+.b-nightmare{ background:var(--red);    color:#fff; }
+.b-spam     { background:var(--yellow); color:var(--ink); }
+.b-corp     { background:var(--blue);   color:#fff; }
+.b-social   { background:#7c3aed;       color:#fff; }
+.e-subject  { font-family:'Courier Prime',monospace; font-size:15px; font-weight:700; color:var(--ink); margin-bottom:8px; line-height:1.3; }
+.e-body     { font-family:'Courier Prime',monospace; font-size:12px; color:#444; line-height:1.6; }
+
+/* actions */
+.actions {
+  display:grid; grid-template-columns:1fr 1fr 1fr;
+  gap:10px; width:100%; max-width:540px;
+}
+.act-btn {
+  padding:13px 6px; border:none; border-radius:2px;
+  font-family:'IBM Plex Mono',monospace; font-weight:600;
+  cursor:pointer; display:flex; flex-direction:column;
+  align-items:center; gap:3px; font-size:11px;
+  letter-spacing:1px;
+  transition:transform .1s, box-shadow .1s, filter .1s;
+  -webkit-user-select:none; user-select:none;
+}
+.act-btn .bk { font-family:'VT323',monospace; font-size:24px; line-height:1; }
+.act-btn .bl { font-size:9px; letter-spacing:2px; opacity:.85; }
+
+.btn-D { background:var(--red);   color:#fff; box-shadow:0 4px 0 #7a1a10; }
+.btn-R { background:var(--green); color:#fff; box-shadow:0 4px 0 #0e5e2e; }
+.btn-F { background:var(--blue);  color:#fff; box-shadow:0 4px 0 #103f6b; }
+
+.act-btn:hover  { filter:brightness(1.1); transform:translateY(-2px); }
+.act-btn:active { transform:translateY(3px); box-shadow:none; }
+.act-btn.pressed{ transform:scale(.92) translateY(2px); filter:brightness(1.3); }
+
+.hint { text-align:center; font-size:9px; color:#333; letter-spacing:2px; }
+
+/* ─── FEEDBACK FLASH ──────────────────────────────────────────────────── */
+#feedback {
+  position:fixed; top:42%; left:50%; transform:translate(-50%,-50%);
+  font-family:'VT323',monospace; font-size:68px;
+  pointer-events:none; z-index:700; opacity:0;
+  text-shadow:3px 3px 0 rgba(0,0,0,.5);
+}
+#feedback.good { color:var(--green); animation:fbPop .7s forwards; }
+#feedback.bad  { color:var(--red-hi); animation:fbPop .7s forwards; }
+@keyframes fbPop {
+  0%  { opacity:0; transform:translate(-50%,-50%) scale(.5); }
+  30% { opacity:1; transform:translate(-50%,-62%) scale(1.1); }
+  70% { opacity:1; transform:translate(-50%,-66%) scale(1); }
+  100%{ opacity:0; transform:translate(-50%,-82%) scale(.9); }
+}
+
+/* ─── SANITY VIGNETTE ─────────────────────────────────────────────────── */
+#sanity-vignette {
+  position:fixed; inset:0;
+  background:radial-gradient(ellipse at center, transparent 55%, rgba(191,55,40,.18) 100%);
+  pointer-events:none; z-index:8998; opacity:0; transition:opacity 1s;
+}
+
+/* ─── GAME OVER ───────────────────────────────────────────────────────── */
+#screen-gameover { gap:0; }
+
+.go-paper {
+  width:100%; max-width:540px;
+  background:var(--paper); border:3px solid #2a2a2a;
+  border-radius:3px; padding:28px 24px;
+  position:relative;
+  box-shadow: 0 0 0 7px #1a1a1a, 0 0 0 9px #363636, 0 20px 60px rgba(0,0,0,.9);
+}
+.go-stamp {
+  position:absolute; top:18px; right:16px;
+  border:3px solid var(--red); color:var(--red);
+  font-family:'VT323',monospace; font-size:24px;
+  padding:3px 10px; letter-spacing:3px;
+  transform:rotate(11deg); opacity:.8;
+}
+.go-title  { font-family:'VT323',monospace; font-size:60px; color:var(--ink); line-height:1; }
+.go-reason { font-family:'Courier Prime',monospace; font-size:12px; color:#666; font-style:italic; margin-bottom:20px; }
+
+.stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0; }
+.stat-box   { background:var(--ink); color:var(--paper); padding:10px 12px; border-radius:2px; }
+.stat-lbl   { font-size:8px; letter-spacing:3px; color:#666; text-transform:uppercase; }
+.stat-val   { font-family:'VT323',monospace; font-size:30px; line-height:1.1; }
+
+.share-box {
+  background:#ede7d5; border:1px dashed #bbb;
+  border-radius:2px; padding:12px 14px;
+  font-family:'Courier Prime',monospace; font-size:13px;
+  color:var(--ink); margin:14px 0;
+  cursor:pointer; user-select:all; position:relative;
+  white-space:pre-line; line-height:1.5;
+}
+.share-box::after {
+  content:'TAP TO COPY';
+  position:absolute; top:-9px; right:8px;
+  background:var(--yellow); color:var(--ink);
+  font-size:8px; padding:2px 6px; letter-spacing:2px;
+  font-family:'IBM Plex Mono',monospace;
+}
+.share-box.copied::after { content:'COPIED ✓'; background:var(--green); color:#fff; }
+
+.go-btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px; }
+.btn-secondary {
+  padding:11px; border:2px solid var(--ink); background:transparent;
+  color:var(--ink); font-family:'VT323',monospace; font-size:22px;
+  letter-spacing:2px; cursor:pointer; border-radius:2px;
+  transition:background .15s, color .15s;
+}
+.btn-secondary:hover { background:var(--ink); color:var(--paper); }
+
+/* ─── LEADERBOARD MODAL ───────────────────────────────────────────────── */
+#lb-modal {
+  display:none;
+  position:fixed; inset:0; z-index:600;
+  background:rgba(8,8,10,.88);
+  align-items:center; justify-content:center;
+  padding:16px;
+}
+#lb-modal.open { display:flex; }
+
+.lb-inner {
+  width:100%; max-width:480px;
+  background:var(--paper); border:3px solid #333;
+  border-radius:3px; padding:24px 20px;
+  box-shadow:0 0 0 7px #1a1a1a, 0 20px 60px rgba(0,0,0,.9);
+  max-height:85vh; overflow-y:auto;
+}
+.lb-head {
+  display:flex; justify-content:space-between; align-items:center;
+  border-bottom:2px dashed #ccc; padding-bottom:12px; margin-bottom:14px;
+}
+.lb-title { font-family:'VT323',monospace; font-size:36px; color:var(--ink); }
+.lb-close {
+  background:var(--ink); color:var(--paper);
+  border:none; padding:4px 10px;
+  font-family:'VT323',monospace; font-size:20px;
+  cursor:pointer; border-radius:2px;
+}
+
+.lb-table { width:100%; border-collapse:collapse; font-family:'Courier Prime',monospace; }
+.lb-table th {
+  font-size:9px; letter-spacing:2px; text-transform:uppercase;
+  color:#888; padding:4px 6px; text-align:left;
+  border-bottom:1px solid #ddd;
+}
+.lb-table td {
+  padding:7px 6px; font-size:13px; color:var(--ink);
+  border-bottom:1px solid #eee;
+}
+.lb-table tr:last-child td { border-bottom:none; }
+.lb-table td:first-child { font-weight:700; color:#999; font-size:11px; }
+.lb-table td:nth-child(3) { font-weight:700; font-family:'VT323',monospace; font-size:20px; }
+.lb-table tr.my-row td { background:#fff8e8; }
+.lb-table tr.my-row td:first-child { color:var(--amber); }
+
+.lb-loading {
+  text-align:center; padding:24px;
+  font-family:'Courier Prime',monospace;
+  font-size:13px; color:#888;
+  animation: dots 1.2s infinite;
+}
+@keyframes dots {
+  0%,100%{opacity:1} 50%{opacity:.3}
+}
+.lb-error { text-align:center; padding:16px; font-size:12px; color:var(--red); font-family:'Courier Prime',monospace; }
+
+/* ─── NAME MODAL ──────────────────────────────────────────────────────── */
+#name-modal {
+  display:none;
+  position:fixed; inset:0; z-index:700;
+  background:rgba(8,8,10,.92);
+  align-items:center; justify-content:center;
+  padding:16px;
+}
+#name-modal.open { display:flex; }
+
+.nm-inner {
+  width:100%; max-width:380px;
+  background:var(--paper); border:3px solid #333;
+  border-radius:3px; padding:28px 24px;
+  box-shadow:0 0 0 7px #1a1a1a, 0 20px 60px rgba(0,0,0,.9);
+  text-align:center;
+}
+.nm-title  { font-family:'VT323',monospace; font-size:40px; color:var(--ink); margin-bottom:6px; }
+.nm-sub    { font-family:'Courier Prime',monospace; font-size:12px; color:#666; margin-bottom:20px; }
+.nm-input  {
+  width:100%; padding:10px 12px;
+  font-family:'IBM Plex Mono',monospace; font-size:16px;
+  border:2px solid var(--ink); border-radius:2px;
+  background:var(--paper); color:var(--ink);
+  text-align:center; outline:none; margin-bottom:14px;
+}
+.nm-input:focus { border-color:var(--red); }
+.nm-submit {
+  width:100%; padding:12px;
+  background:var(--red); color:#fff; border:none;
+  font-family:'VT323',monospace; font-size:26px;
+  letter-spacing:3px; cursor:pointer; border-radius:2px;
+  box-shadow:0 4px 0 #7a1a10;
+  transition:transform .1s, box-shadow .1s;
+}
+.nm-submit:hover  { transform:translateY(-2px); box-shadow:0 6px 0 #7a1a10; }
+.nm-submit:active { transform:translateY(2px);  box-shadow:0 2px 0 #7a1a10; }
+.nm-skip { font-family:'Courier Prime',monospace; font-size:11px; color:#aaa; cursor:pointer; margin-top:10px; display:block; text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<!-- ── Overlays ─────────────────────────────────────────────────── -->
+<div id="sanity-vignette"></div>
+<div id="feedback"></div>
+
+<!-- ── Name Entry Modal ──────────────────────────────────────────── -->
+<div id="name-modal">
+  <div class="nm-inner">
+    <div class="nm-title">GAME OVER.</div>
+    <div class="nm-sub">Enter your name for the leaderboard:</div>
+    <input class="nm-input" id="nm-input" maxlength="24" placeholder="Your name..." autocomplete="off" spellcheck="false">
+    <button class="nm-submit" onclick="submitAndContinue()">POST SCORE</button>
+    <span class="nm-skip" onclick="skipSubmit()">skip — don't save my score</span>
+  </div>
+</div>
+
+<!-- ── Leaderboard Modal ─────────────────────────────────────────── -->
+<div id="lb-modal">
+  <div class="lb-inner">
+    <div class="lb-head">
+      <div class="lb-title">🏆 LEADERBOARD</div>
+      <button class="lb-close" onclick="closeLb()">✕ CLOSE</button>
+    </div>
+    <div id="lb-body"><div class="lb-loading">Loading scores…</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- TITLE SCREEN                                                   -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="screen active" id="screen-title">
+  <div class="monitor">
+    <div class="monitor-dots">● ● ●</div>
+    <div class="title-ascii">📧 EMAIL<br>AVALANCHE</div>
+    <div class="title-sub">A workplace survival simulator</div>
+    <hr class="hdivider">
+    <div class="title-blurb">
+      It's <strong>5:47pm on a Friday.</strong><br>
+      You have <strong>247 unread emails.</strong><br>
+      Your sanity: <strong>hanging by a thread.</strong>
+    </div>
+    <div class="key-row">
+      <div class="kpill"><span class="k">D</span> Delete</div>
+      <div class="kpill"><span class="k">R</span> Reply</div>
+      <div class="kpill"><span class="k">F</span> Forward</div>
+    </div>
+    <button class="btn-primary" onclick="startGame()">▶ CLOCK IN</button>
+    <button class="btn-secondary" style="width:100%;margin-top:10px;" onclick="openLb()">🏆 LEADERBOARD</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- GAME SCREEN                                                    -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-game">
+
+  <div class="hud">
+    <div class="hud-box">
+      <div class="hud-lbl">Sanity</div>
+      <div class="hud-val" id="hud-sanity">100%</div>
+      <div class="sbar-wrap"><div class="sbar" id="sbar"></div></div>
+    </div>
+    <div class="hud-box">
+      <div class="hud-lbl">Processed</div>
+      <div class="hud-val" id="hud-score">0</div>
+    </div>
+    <div class="hud-box">
+      <div class="hud-lbl">Speed</div>
+      <div class="hud-val" id="hud-speed">×1.0</div>
+    </div>
+  </div>
+
+  <div class="timer-wrap"><div class="timer-bar" id="timer-bar" style="width:100%"></div></div>
+
+  <div class="inbox-area">
+    <div class="email-card" id="email-card"></div>
+  </div>
+
+  <div class="actions">
+    <button class="act-btn btn-D" id="btn-D" onclick="act('D')">
+      <span class="bk">D</span><span class="bl">Delete</span>
+    </button>
+    <button class="act-btn btn-R" id="btn-R" onclick="act('R')">
+      <span class="bk">R</span><span class="bl">Reply</span>
+    </button>
+    <button class="act-btn btn-F" id="btn-F" onclick="act('F')">
+      <span class="bk">F</span><span class="bl">Forward</span>
+    </button>
+  </div>
+  <div class="hint">keyboard: D · R · F</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- GAME OVER SCREEN                                               -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-gameover">
+  <div class="go-paper">
+    <div class="go-stamp">TERMINATED</div>
+    <div class="go-title">YOU QUIT.</div>
+    <div class="go-reason" id="go-reason">Your brain filed itself as spam.</div>
+
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-lbl">Emails Processed</div>
+        <div class="stat-val" id="go-score">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-lbl">Global Rank</div>
+        <div class="stat-val" id="go-rank">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-lbl">Accuracy</div>
+        <div class="stat-val" id="go-accuracy">0%</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-lbl">Nightmares</div>
+        <div class="stat-val" id="go-nightmares">0</div>
+      </div>
+    </div>
+
+    <div class="share-box" id="share-box" onclick="copyShare()">Loading…</div>
+
+    <div class="go-btns">
+      <button class="btn-secondary" onclick="startGame()">↺ RETRY</button>
+      <button class="btn-secondary" onclick="openLb()">🏆 RANKS</button>
+    </div>
+    <button class="btn-primary" onclick="tgShare()" id="tg-share-btn" style="display:none;margin-top:10px;">
+      ✈ SHARE ON TELEGRAM
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<script>
+/* ── CONFIG — change API_BASE to your deployed URL ────────────── */
+const API_BASE = 'email-avalanche-api-production.up.railway.app';  
+
+/* ── Telegram SDK ─────────────────────────────────────────────── */
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+}
+
+/* ── Email pool ───────────────────────────────────────────────── */
+const EMAILS = [
+  // SPAM → Delete
+  { badge:'spam',  bl:'SPAM',        from:'prince.adeyemi@gmail.com',       subject:'URGENT: $4,800,000 awaits you',                                   body:'Dear Friend, I am a Nigerian prince seeking trusted partner for fund transfer. Reply with bank details for 40% commission…',     correct:'D', penalty:15 },
+  { badge:'spam',  bl:'SPAM',        from:'deals@amazn-promo.co',           subject:'You WON an iPhone 47 Pro!!!',                                      body:'Congratulations!! Click here to claim your prize within 24 hours. Only 1 winner selected from your region…',                   correct:'D', penalty:10 },
+  { badge:'spam',  bl:'SPAM',        from:'newsletter@couponblast999.com',  subject:'Your exclusive 90% OFF expires TONIGHT',                           body:'FINAL NOTICE. Your exclusive deal expires in 00:47:22. Act now or regret forever…',                                           correct:'D', penalty:10 },
+  // SOCIAL → Delete
+  { badge:'social',bl:'SOCIAL',      from:'no-reply@linkedin.com',          subject:'Dave Miller wants to connect',                                     body:'Hi! I came across your profile. I\'m a Growth Hacker helping B2B SaaS scale to 7 figures. Let\'s connect?',                    correct:'D', penalty:5  },
+  { badge:'social',bl:'SOCIAL',      from:'birthday@facebook.com',          subject:'🎂 It\'s Karen\'s birthday!',                                      body:'Karen from accounting turns 47 today! Write on her wall to wish her a great day 🎉🎂',                                         correct:'D', penalty:5  },
+  // REPLY-ALL → Delete
+  { badge:'social',bl:'CHAIN',       from:'office-all@company.com',         subject:'RE: RE: RE: RE: FREE DONUTS (47 replies)',                         body:'"There are no more donuts." "Are there any left?" "I took the last one, sorry!" "Please STOP replying all"…',                  correct:'D', penalty:8  },
+  { badge:'social',bl:'CHAIN',       from:'office-all@company.com',         subject:'RE: RE: Please STOP replying all (31 replies)',                    body:'"Please remove me from this thread" "HOW DO I UNSUBSCRIBE" "Who keeps adding me back?!"…',                                     correct:'D', penalty:8  },
+  // CORPORATE → Reply
+  { badge:'corp',  bl:'CORPORATE',   from:'hr@company.com',                 subject:'MANDATORY: Updated Expense Policy v47.2',                          body:'All employees must review the 17-page policy and confirm receipt by clicking REPLY. Failure to respond = agreement to new terms.',correct:'R', penalty:20, nightmare:true  },
+  { badge:'corp',  bl:'CORPORATE',   from:'it-security@company.com',        subject:'ACTION REQUIRED: Reset password (expires 2 hrs)',                  body:'Your password expires in 2 hours. Failure to update may lock your account. Reply to confirm receipt.',                         correct:'R', penalty:15 },
+  { badge:'corp',  bl:'CORPORATE',   from:'compliance@company.com',         subject:'Mandatory Training Reminder #8',                                   body:'This is your eighth reminder to complete mandatory compliance training. Please reply to confirm you will finish it by Friday.',  correct:'R', penalty:15 },
+  // NIGHTMARE BOSS → Reply
+  { badge:'nightmare',bl:'🔥 BOSS',  from:'boss@company.com',               subject:'Can you send me that report?',                                     body:'Hey — need the Q3 analysis ASAP. Should have it on my desk by EOD. This is urgent. I\'m in board meeting in 3 mins.',         correct:'R', penalty:25, nightmare:true, time:'5:57 PM' },
+  { badge:'nightmare',bl:'🔥 BOSS',  from:'boss@company.com',               subject:'Per my last email…',                                               body:'As I mentioned in my previous 6 emails, I still haven\'t received the Johnson file. This is now affecting client relationships. Let\'s discuss Monday.',correct:'R',penalty:30,nightmare:true,time:'6:02 PM'},
+  { badge:'nightmare',bl:'💀 HR',    from:'hr@company.com',                 subject:'We need to talk. Are you free 9am tomorrow?',                      body:'Hi, I\'d like to schedule some time to discuss a few things. Please reply to confirm. No need to worry.',                       correct:'R', penalty:35, nightmare:true },
+  { badge:'nightmare',bl:'💀 HR',    from:'hr@company.com',                 subject:'Following up on our conversation',                                 body:'Just circling back on what we discussed. Please reply at your earliest convenience. Leadership is also looped in.',             correct:'R', penalty:30, nightmare:true },
+  // FORWARD
+  { badge:'corp',  bl:'FORWARD',     from:'client@bizcorp.com',             subject:'Invoice #4471 — please route to accounts payable',                 body:'Hi, please find Invoice #4471 for $12,400. Could you forward this to the right department? Thank you.',                        correct:'F', penalty:15 },
+  { badge:'corp',  bl:'FORWARD',     from:'recruit@talentco.com',           subject:'Job application — please forward to HR',                           body:'I\'m writing to express my interest in the Marketing Manager position. Could you forward my CV to the appropriate person?',     correct:'F', penalty:12 },
+  { badge:'nightmare',bl:'🔥 BOSS',  from:'boss@company.com',               subject:'FWD: FWD: FWD: This. NOW.',                                        body:'[Forwarded 7 times] Can someone handle this? It\'s been sitting 3 weeks. Forward to whoever owns this. I don\'t care who.',   correct:'F', penalty:25, nightmare:true },
+];
+
+const REASONS = [
+  'You forwarded your resignation to everyone.',
+  'You replied-all to the board of directors.',
+  'Your brain filed itself as spam.',
+  'You deleted the CEO by accident.',
+  'You became the Nigerian prince.',
+  "HR's email broke you completely.",
+  'You CC\'d your therapist on a client email.',
+  'You replied "per my last email" to IT support.',
+];
+
+/* ── State ────────────────────────────────────────────────────── */
+let G = {};
+
+function reset() {
+  G = {
+    sanity:100, score:0, active:false,
+    timerLeft:0, timerMax:8000,
+    timerIv:null,
+    currentEmail:null,
+    queue:[],
+    nightmares:0, correct:0, total:0,
+    lastRank:null, lastScore:0,
+    savedName: localStorage.getItem('ea_name') || '',
+  };
+}
+
+/* ── Screens ─────────────────────────────────────────────────── */
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+}
+
+/* ── Game Start ──────────────────────────────────────────────── */
+function startGame() {
+  reset();
+  fillQueue();
+  show('game');
+  G.active = true;
+  nextEmail();
+}
+
+function fillQueue() {
+  const pool = [...EMAILS];
+  for (let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+  G.queue = [...pool,...pool,...pool];
+}
+
+/* ── Email render ────────────────────────────────────────────── */
+function nextEmail() {
+  if (!G.queue.length) fillQueue();
+  G.currentEmail = G.queue.shift();
+  if (G.currentEmail.nightmare) G.nightmares++;
+  renderCard(G.currentEmail);
+  startTimer();
+}
+
+function renderCard(e) {
+  const card = document.getElementById('email-card');
+  card.className = 'email-card' + (e.nightmare?' nightmare':'');
+  const t = e.time || rndTime();
+  const bc = {nightmare:'b-nightmare',spam:'b-spam',corp:'b-corp',social:'b-social'}[e.badge]||'b-corp';
+  card.innerHTML = `
+    <div class="e-header">
+      <div>
+        <div class="e-from">From: ${e.from}</div>
+        <span class="e-badge ${bc}">${e.bl}</span>
+      </div>
+      <div class="e-time">${t}</div>
+    </div>
+    <div class="e-subject">${e.subject}</div>
+    <div class="e-body">${e.body}</div>`;
+}
+
+function rndTime() {
+  const h=Math.floor(Math.random()*3)+4;
+  const m=String(Math.floor(Math.random()*60)).padStart(2,'0');
+  return `${h}:${m} PM`;
+}
+
+/* ── Timer ───────────────────────────────────────────────────── */
+function startTimer() {
+  clearInterval(G.timerIv);
+  G.timerMax = Math.max(2400, 8000 - G.score*110);
+  G.timerLeft = G.timerMax;
+  const bar = document.getElementById('timer-bar');
+  bar.style.width='100%'; bar.style.background='var(--green)';
+  G.timerIv = setInterval(()=>{
+    G.timerLeft -= 50;
+    const pct = Math.max(0, G.timerLeft/G.timerMax*100);
+    bar.style.width = pct+'%';
+    bar.style.background = pct<30?'var(--red)':pct<60?'var(--yellow)':'var(--green)';
+    if(G.timerLeft<=0){ clearInterval(G.timerIv); onTimeout(); }
+  }, 50);
+}
+
+function onTimeout() {
+  if(!G.active) return;
+  G.total++;
+  doShake();
+  hurt(G.currentEmail.penalty+5, 'TOO SLOW');
+  if(G.active) setTimeout(nextEmail, 520);
+}
+
+/* ── Act ─────────────────────────────────────────────────────── */
+function act(key) {
+  if(!G.active || !G.currentEmail) return;
+  clearInterval(G.timerIv);
+  const e = G.currentEmail;
+  G.total++;
+
+  // Button flash
+  const btn = document.getElementById('btn-'+key);
+  if(btn){ btn.classList.add('pressed'); setTimeout(()=>btn.classList.remove('pressed'),200); }
+
+  const dirs = {D:'fly-left',R:'fly-up',F:'fly-right'};
+
+  if(key===e.correct) {
+    G.correct++; G.score++;
+    if(e.badge==='spam') adjustSanity(+2);
+    flash('+HANDLED','good');
+    animCard(dirs[key]);
+    updateHUD();
+    if(G.active) setTimeout(nextEmail, 360);
+  } else {
+    hurt(e.penalty, e.nightmare?'💀 NIGHTMARE!':'WRONG!');
+    doShake();
+    if(G.active) setTimeout(nextEmail, 540);
+  }
+  updateHUD();
+}
+
+function hurt(amt, label) {
+  flash(label,'bad');
+  if(G.currentEmail?.nightmare) nightmareFlash();
+  adjustSanity(-amt);
+}
+
+function adjustSanity(d) {
+  G.sanity = Math.max(0, Math.min(100, G.sanity+d));
+  const vig = document.getElementById('sanity-vignette');
+  vig.style.opacity = G.sanity<=20?'1':G.sanity<=50?'0.55':'0';
+  updateHUD();
+  if(G.sanity<=0) gameOver();
+}
+
+/* ── HUD ─────────────────────────────────────────────────────── */
+function updateHUD() {
+  const s = G.sanity;
+  const hv = document.getElementById('hud-sanity');
+  hv.textContent = s+'%';
+  const c = s<=20?'var(--red)':s<=50?'var(--yellow)':'var(--green)';
+  hv.style.color = c;
+  document.getElementById('sbar').style.width = s+'%';
+  document.getElementById('sbar').style.background = c;
+  document.getElementById('hud-score').textContent = G.score;
+  document.getElementById('hud-speed').textContent = '×'+Math.max(1,1+G.score*.08).toFixed(1);
+}
+
+/* ── Animations ──────────────────────────────────────────────── */
+function animCard(cls) {
+  const c=document.getElementById('email-card');
+  c.classList.remove('fly-left','fly-right','fly-up','do-shake');
+  void c.offsetWidth; c.classList.add(cls);
+}
+function doShake() {
+  const c=document.getElementById('email-card');
+  c.classList.remove('do-shake'); void c.offsetWidth; c.classList.add('do-shake');
+}
+function flash(txt,type){
+  const el=document.getElementById('feedback');
+  el.textContent=txt; el.className=''; void el.offsetWidth; el.className=type;
+}
+function nightmareFlash(){
+  document.body.style.transition='background .1s';
+  document.body.style.background='#1a0505';
+  setTimeout(()=>{document.body.style.background='var(--bg)';},300);
+}
+
+/* ── Game Over ───────────────────────────────────────────────── */
+function gameOver() {
+  G.active = false;
+  clearInterval(G.timerIv);
+  document.getElementById('sanity-vignette').style.opacity='0';
+
+  G.lastScore = G.score;
+  const acc = G.total>0?Math.round(G.correct/G.total*100):0;
+
+  document.getElementById('go-score').textContent      = G.score;
+  document.getElementById('go-accuracy').textContent   = acc+'%';
+  document.getElementById('go-nightmares').textContent = G.nightmares;
+  document.getElementById('go-rank').textContent       = '…';
+  document.getElementById('go-reason').textContent     = REASONS[Math.floor(Math.random()*REASONS.length)];
+
+  // Show share text placeholder
+  setShareText(G.score, acc, G.nightmares, null);
+
+  // Show game over screen
+  setTimeout(()=>show('gameover'), 350);
+
+  // Show Telegram share button if inside Telegram
+  if(tg) document.getElementById('tg-share-btn').style.display='block';
+
+  // Ask for name if not saved, else submit silently
+  setTimeout(()=>{
+    if(!G.savedName) {
+      openNameModal(acc);
+    } else {
+      submitScore(G.savedName, G.score, acc, G.nightmares);
+    }
+  }, 600);
+}
+
+/* ── Share text ─────────────────────────────────────────────── */
+function setShareText(score, acc, nightmares, rank) {
+  const rankStr = rank ? ` | Rank #${rank}` : '';
+  const txt = `📧 EMAIL AVALANCHE\nI survived ${score} emails before losing my mind.\nAccuracy: ${acc}%  Nightmares: ${nightmares}${rankStr}\nBeat me → t.me/YourBotName`;
+  document.getElementById('share-box').textContent = txt;
+}
+
+function copyShare() {
+  const el = document.getElementById('share-box');
+  navigator.clipboard?.writeText(el.textContent).then(()=>{
+    el.classList.add('copied');
+    setTimeout(()=>el.classList.remove('copied'),2000);
+  });
+}
+
+function tgShare() {
+  if(!tg) return;
+  const txt = document.getElementById('share-box').textContent;
+  tg.switchInlineQuery(txt);
+}
+
+/* ── Name Modal ──────────────────────────────────────────────── */
+function openNameModal(acc) {
+  const modal = document.getElementById('name-modal');
+  const input = document.getElementById('nm-input');
+  input.value = G.savedName || (tg?.initDataUnsafe?.user?.first_name || '');
+  modal.classList.add('open');
+  setTimeout(()=>input.focus(),100);
+  modal._acc = acc;
+}
+
+function submitAndContinue() {
+  const modal = document.getElementById('name-modal');
+  const name  = document.getElementById('nm-input').value.trim();
+  if(!name) return;
+  G.savedName = name;
+  localStorage.setItem('ea_name', name);
+  modal.classList.remove('open');
+  const acc = modal._acc||0;
+  submitScore(name, G.lastScore, acc, G.nightmares);
+}
+
+function skipSubmit() {
+  document.getElementById('name-modal').classList.remove('open');
+}
+
+/* ── API calls ───────────────────────────────────────────────── */
+async function submitScore(name, score, accuracy, nightmares) {
+  try {
+    const res = await fetch(`${API_BASE}/scores`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,score,accuracy,nightmares})
+    });
+    if(!res.ok) return;
+    const data = await res.json();
+    G.lastRank = data.rank;
+    document.getElementById('go-rank').textContent = '#'+data.rank;
+    setShareText(score, accuracy, nightmares, data.rank);
+  } catch(e) {
+    document.getElementById('go-rank').textContent = '—';
+  }
+}
+
+async function fetchLeaderboard() {
+  const body = document.getElementById('lb-body');
+  body.innerHTML = '<div class="lb-loading">Fetching scores…</div>';
+  try {
+    const res  = await fetch(`${API_BASE}/leaderboard?limit=20`);
+    if(!res.ok) throw new Error('server error');
+    const data = await res.json();
+    const entries = data.leaderboard;
+    if(!entries.length) { body.innerHTML='<div class="lb-error">No scores yet. Be the first!</div>'; return; }
+
+    const myName = G.savedName;
+    let html = `<table class="lb-table">
+      <thead><tr><th>#</th><th>Name</th><th>Score</th><th>Acc</th></tr></thead><tbody>`;
+    entries.forEach(e=>{
+      const mine = myName && e.name===myName && e.score===G.lastScore;
+      html+=`<tr class="${mine?'my-row':''}">
+        <td>${e.rank}</td>
+        <td>${esc(e.name)}</td>
+        <td>${e.score}</td>
+        <td>${e.accuracy}%</td>
+      </tr>`;
+    });
+    html+='</tbody></table>';
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = `<div class="lb-error">Couldn't load scores.<br>Is the API running?</div>`;
+  }
+}
+
+function openLb()  { document.getElementById('lb-modal').classList.add('open'); fetchLeaderboard(); }
+function closeLb() { document.getElementById('lb-modal').classList.remove('open'); }
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ── Keyboard ────────────────────────────────────────────────── */
+document.addEventListener('keydown', e=>{
+  if(!G.active) return;
+  const k=e.key.toUpperCase();
+  if(['D','R','F'].includes(k)){ e.preventDefault(); act(k); }
+});
+
+document.getElementById('nm-input').addEventListener('keydown', e=>{
+  if(e.key==='Enter') submitAndContinue();
+});
+
+/* ── Init ────────────────────────────────────────────────────── */
+reset();
+</script>
+</body>
+</html>
