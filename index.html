@@ -786,7 +786,7 @@ function gameOver() {
 /* ── Share text ─────────────────────────────────────────────── */
 function setShareText(score, acc, nightmares, rank) {
   const rankStr = rank ? ` | Rank #${rank}` : '';
-  const txt = `📧 EMAIL AVALANCHE\nI survived ${score} emails before losing my mind.\nAccuracy: ${acc}%  Nightmares: ${nightmares}${rankStr}\nBeat me → t.me/YourBotName`;
+  const txt = `📧 EMAIL AVALANCHE\nI survived ${score} emails before losing my mind.\nAccuracy: ${acc}%  Nightmares: ${nightmares}${rankStr}\nBeat me → t.me/EmailAvalancheBot/play`;
   document.getElementById('share-box').textContent = txt;
 }
 
