@@ -800,12 +800,9 @@ function copyShare() {
 
 function tgShare() {
   const txt = document.getElementById('share-box').textContent;
-  const url = 'https://t.me/share/url?url=t.me/EmailAvalancheBot/play&text=' + encodeURIComponent(txt);
-  if(tg) {
-    tg.openLink(url);
-  } else {
-    window.open(url);
-  }
+  const url = 'https://t.me/share/url?url=' + encodeURIComponent('https://t.me/EmailAvalancheBot/play') + '&text=' + encodeURIComponent(txt);
+  if(tg) tg.openLink(url);
+  else window.open(url);
 }
 
 /* ── Name Modal ──────────────────────────────────────────────── */
